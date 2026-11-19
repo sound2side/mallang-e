@@ -522,8 +522,12 @@ const CATS=[
   {id:'acc',label:'ACC',n:19,names:['NONE','CROWN','PARTY HAT','CAP','BERET','TOP HAT','BUNNY EARS','HEADPHONES','HALO','FLOWER','RIBBON','STAR CLIP','HEART CLIP','FLOWER CROWN','HEADBAND','WITCH HAT','LEAF','GOGGLES','CAT BAND']},
   {id:'height',label:'HEIGHT',n:5,names:['XS','S','M','L','XL']},
   {id:'width',label:'WIDTH',n:5,names:['SLIM','LEAN','REGULAR','ROUND','CHUBBY']},
+  {id:'pet',label:'PET',n:7,names:['NONE','DOG','CAT','BIRD','HAMSTER','FISH','RABBIT']},
+  {id:'psize',label:'PET SIZE',n:2,names:['SMALL','BIG']},
+  {id:'pcoat',label:'PET COAT',n:4,names:['WHITE','GREY','BLACK','SPOTS']},
+  {id:'pfeat',label:'PET+',n:2,names:['A','B']},
 ];
-const def={face:0,hair:1,eyes:0,mouth:0,extra:1,acc:0,height:2,width:2,eyeY:0,eyeSp:0,mouthY:0,extraY:0};
+const def={face:0,hair:1,eyes:0,mouth:0,extra:1,acc:0,height:2,width:2,pet:0,psize:0,pcoat:0,pfeat:0,eyeY:0,eyeSp:0,mouthY:0,extraY:0};
 let st={...def}; let ci=1;
 
 const MODS={
@@ -544,8 +548,8 @@ try{const l=JSON.parse(localStorage.getItem(LKEY)||'null');if(Array.isArray(l)&&
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(roster))}catch(e){}}
 function persistLoad(){try{localStorage.setItem(LKEY,JSON.stringify(slots))}catch(e){}}
 if(!roster.length){roster=[
-  {name:'NO.1',s:{...def,face:0,hair:5,eyes:1,mouth:3,extra:1,acc:9}},
-  {name:'NO.2',s:{...def,face:2,hair:8,eyes:3,mouth:0,extra:2,height:3,acc:1}},
+  {name:'NO.1',s:{...def,face:0,hair:5,eyes:1,mouth:3,extra:1,acc:9,pet:1,psize:1,pcoat:3,pfeat:1}},
+  {name:'NO.2',s:{...def,face:2,hair:8,eyes:3,mouth:0,extra:2,height:3,acc:1,pet:2,psize:0,pcoat:2,pfeat:0}},
   {name:'NO.3',s:{...def,face:1,hair:2,eyes:4,mouth:1,extra:3,width:3,height:1}}]}
 /* ---------- random personality, like a village resident ---------- */
 const TR={
@@ -617,7 +621,7 @@ function render(buf,s,o){
   const sq=o.squish||0,jump=o.jump||0;
   const sc=[.7,.8,.89,.98,1.07][s.height],ws=[.84,.92,1,1.08,1.16][s.width]; // height scales the whole figure
   const rx=10.5*sc*ws*(1+.28*sq),ry=11.5*sc*(1-.33*sq);
-  const feet=44-Math.round(jump),cx=32,cy=feet-7*sc-ry+1.5;
+  const feet=44-Math.round(jump),cx=(s.pet&&!o.bare)?27:32,cy=feet-7*sc-ry+1.5;
   if(!o.bare){for(let x=2;x<W-2;x+=2)set(x,46,2);
   if(o.empty)return;
   const shw=Math.max(3,8*sc-jump*.4);
@@ -717,6 +721,7 @@ function render(buf,s,o){
   if(s.extra===14)pat(['.1','11'],cx,ey+3);
   if(s.extra===15){for(const sx of[cx-sp,cx+sp])pat(['111111','111111','.1111.'],sx,ey);for(let x=Math.round(cx-sp+3);x<=Math.round(cx+sp-3);x++)set(x,ey-1,1)}
   if(s.acc)drawAcc(s.acc);
+  if(s.pet&&!o.bare)drawPet(set,s,53,45,{hop:Math.round(jump*.6),blink:o.blink,t:performance.now()/1000});
   function drawAcc(a){
     const top=cy-ry*(s.hair&&s.hair!==13?1.13:1.0);
     const bord=p=>{const h=p.length+2,w=p[0].length+2,g=[];for(let j=0;j<h;j++){let r='';for(let i=0;i<w;i++){const c=(p[j-1]||'')[i-1];
@@ -761,6 +766,58 @@ function render(buf,s,o){
 function paint(ctx,buf,pal=PAL){const img=ctx.createImageData(W,H);
   for(let i=0;i<W*H;i++){const c=pal[buf[i]];img.data[i*4]=c[0];img.data[i*4+1]=c[1];img.data[i*4+2]=c[2];img.data[i*4+3]=255}
   ctx.putImageData(img,0,0)}
+const PET_KO=['','강아지','고양이','새','햄스터','물고기','토끼'];
+/* ---------- pets: procedural pixel pets, facing left toward their resident ---------- */
+const PET_NAMES=['NONE','DOG','CAT','BIRD','HAMSTER','FISH','RABBIT'];
+const PET_FEAT=[['-','-'],['POINTY EARS','FLOPPY EARS'],['TAIL UP','CURLY TAIL'],['CREST','ROUND HEAD'],['FULL CHEEKS','SLIM CHEEKS'],['GOLDFISH','BETTA'],['UP EARS','LOP EARS']];
+const PE=(x,y,rx,ry,v)=>({t:'e',x,y,rx,ry,v}),PR=(x0,y0,x1,y1,v)=>({t:'r',x0,y0,x1,y1,v}),PT=(a,b,c,d,e,f,v)=>({t:'t',p:[a,b,c,d,e,f],v});
+function petIn(s,u,v){
+  if(s.t==='e')return((u-s.x)/s.rx)**2+((v-s.y)/s.ry)**2<=1;
+  if(s.t==='r')return u>=s.x0&&u<=s.x1&&v>=s.y0&&v<=s.y1;
+  const[a,b,c,d,e,f]=s.p,cr=(x1,y1,x2,y2)=>(x2-x1)*(v-y1)-(y2-y1)*(u-x1),k1=cr(a,b,c,d),k2=cr(c,d,e,f),k3=cr(e,f,a,b);
+  return(k1>=0&&k2>=0&&k3>=0)||(k1<=0&&k2<=0&&k3<=0)}
+/* v: undefined=coat fill, 'd'=dark, 'm'=mid, 'l'=light, 'x'=cut out */
+function petShape(sp,f){
+  switch(sp){
+    case 1:return{parts:[PE(1.2,-4.6,5,2.9),PE(-4,-8.4,3.1,2.9),PE(-6.9,-7.3,1.9,1.4),PR(-3.6,-3.4,-2.2,0),PR(3.4,-3.4,4.8,0),PE(6.3,-7.2,.9,2.4),
+        ...(f?[PE(-2.7,-8,1.1,2.6,'d')]:[PT(-5.7,-10,-4.6,-13.6,-3.1,-10.6),PT(-3.4,-10.6,-1.8,-13.2,-1.3,-9.4)])],eye:[-4.7,-8.3],nose:[-8.6,-7.8]};
+    case 2:return{parts:[PE(1.4,-4.2,5,2.7),PE(-4,-7.9,3.2,2.9),PT(-6.9,-9.2,-6.2,-13.4,-4.4,-10.4),PT(-3.7,-10.6,-1.9,-13.4,-1.2,-9.4),
+        PR(-3.4,-3,-2,0),PR(3.8,-3,5.2,0),
+        ...(f?[PE(7.6,-6.4,2.3,2.3),PE(7.6,-6.4,1,1,'x')]:[PR(5.6,-11.6,7,-4.4),PE(6.3,-11.6,.8,.9)])],eye:[-4.5,-8],nose:[-7.1,-7.4],whisk:true};
+    case 3:return{parts:[PE(.6,-4.8,4.2,3.6),PE(-2,-8.3,3,2.8),PT(3,-6,7.8,-3.4,3.8,-2.4),PT(-4.6,-9.6,-7.8,-8.4,-4.6,-7.2,'d'),
+        PR(-1,-1.6,-.2,0,'d'),PR(1.4,-1.6,2.2,0,'d'),PE(1.6,-4.8,2.4,1.6,'m'),
+        ...(f?[]:[PT(-3,-10.6,-1.8,-14,-.8,-10.6),PT(-1.8,-10.8,.2,-13.2,.4,-10.2)])],eye:[-2.9,-8.5]};
+    case 4:return{parts:[PE(.5,-4.6,5,4),PE(-2.6,-8.6,1.3,1.3),PE(1.8,-9,1.3,1.3),PE(-2.6,-.6,1.2,.7,'d'),PE(2.8,-.6,1.2,.7,'d'),PE(5.4,-3.8,.9,.8),
+        ...(f?[]:[PE(-3.9,-3.4,2.5,2.1),PE(-3.6,-3.2,1.1,.8,'m')])],eye:[-1.4,-5.8],nose:[-4.4,-4.6]};
+    case 6:return{parts:[PE(1.6,-3.9,4.4,3.3),PE(-3,-6.9,3,2.8),PE(6,-4.8,1.4,1.4,'l'),PE(-2.6,-.7,1.7,.8),PE(3.4,-.7,1.8,.8),
+        ...(f?[PE(-.9,-5.8,1.1,2.9)]:[PE(-4.8,-12.2,1,3.4),PE(-1.6,-12.4,1,3.4)])],eye:[-3.8,-7.6],nose:[-5.8,-6.4]}}}
+function drawPet(set,p,ox,feet,o={}){
+  const sp=p.pet|0;if(!sp)return;
+  const k=p.psize?1:.74,coat=p.pcoat|0,f=p.pfeat|0,hop=o.hop||0;feet=Math.round(feet-hop);
+  const fillV=coat===1?2:coat===2?1:0,eyeV=coat===2?0:1;
+  const spot=(u,v)=>coat===3&&Math.sin(u*1.4+.6)*Math.sin(v*1.5+.3)>.3;
+  if(sp===5){ // fish in a bowl
+    const bowl=(u,v)=>((u)/6.6)**2+((v+5.6)/5.8)**2<=1&&v>-10.2,R=Math.ceil(8*k);
+    const fish=[PE(-.4,-4.8,2.7,1.7),...(f?[PT(1.6,-4.8,5.4,-8.6,5,-1.4),PT(-1.8,-6,1.4,-6.2,.8,-8.6)]:[PT(1.8,-4.8,4.6,-7,4.6,-2.6)])];
+    for(let py=feet-R*2;py<feet;py++)for(let px=ox-R;px<=ox+R;px++){const u=(px+.5-ox)/k,v=(py+.5-feet)/k,uk=1/k;
+      if(bowl(u,v)){const e=!bowl(u-uk,v)||!bowl(u+uk,v)||!bowl(u,v-uk)||!bowl(u,v+uk);
+        const sw=Math.sin((o.t||0)*2)*.6,fu=u-sw,inF=s=>petIn(s,fu,v),fi=fish.some(inF),fe=fi&&!(fish.some(s=>petIn(s,fu-uk,v))&&fish.some(s=>petIn(s,fu+uk,v))&&fish.some(s=>petIn(s,fu,v-uk))&&fish.some(s=>petIn(s,fu,v+uk)));
+        set(px,py,e?1:fi?(fe?1:(coat===0?0:coat===2?1:spot(u,v)?2:coat===1?2:0)):(Math.abs(v+8.6)<.5/k&&((px+py)&1))?2:0)}}
+    const sw=Math.sin((o.t||0)*2)*.6;set(Math.floor(ox+(-2.2+sw)*k),Math.floor(feet+(-5.2)*k),coat===2?0:1);
+    for(let x=Math.round(ox-3*k);x<=Math.round(ox+3*k);x++)set(x,feet,1);return}
+  const S=petShape(sp,f),parts=S.parts,R=Math.ceil(9*k);
+  const inU=(u,v)=>parts.some(s=>s.v!=='x'&&petIn(s,u,v))&&!parts.some(s=>s.v==='x'&&petIn(s,u,v));
+  for(let py=feet-Math.ceil(15*k);py<feet;py++)for(let px=ox-R;px<=ox+R;px++){const u=(px+.5-ox)/k,v=(py+.5-feet)/k,uk=1/k;
+    if(!inU(u,v))continue;
+    if(!inU(u-uk,v)||!inU(u+uk,v)||!inU(u,v-uk)||!inU(u,v+uk)){set(px,py,1);continue}
+    let val=spot(u,v)?2:fillV;
+    for(const s of parts){if(!s.v||s.v==='x'||!petIn(s,u,v))continue;val=s.v==='d'?1:s.v==='m'?(coat===2?0:2):0}
+    set(px,py,val)}
+  const pt=([u,v],val)=>set(Math.floor(ox+u*k),Math.floor(feet+v*k),val);
+  if(!o.blink)pt(S.eye,eyeV);
+  if(S.nose)pt(S.nose,1);
+  if(!o.noShadow){const sh=Math.max(2,Math.round(4*k));for(let x=Math.round(ox-sh);x<=Math.round(ox+sh);x++)set(x,feet,2)}
+}
 
 /* ---------- roles (who does what depends on the loadout) ---------- */
 const has=m=>slots.includes(m);
@@ -784,7 +841,7 @@ function updateStrip(){
   const c=CATS[ci];
   if(toast){catLabel.textContent=toast;catIdx.textContent=''}
   else{catLabel.textContent='< '+c.label+' >';catIdx.textContent=(st[c.id]+1)+'/'+c.n}
-  hint.textContent=c.names[st[c.id]];
+  hint.textContent=c.id==='pfeat'||c.id==='psize'||c.id==='pcoat'?(st.pet?(c.id==='pfeat'?PET_FEAT[st.pet][st.pfeat]:c.names[st[c.id]]):'NO PET'):c.names[st[c.id]];
   const n=slots.filter(Boolean).length;
   hint2.textContent=!hasNav()&&!has('squish')?'NO PART SELECT':!hasChange()&&!has('click')?'NO STYLE CTRL':!has('click')?'SAVE: ADD CLICK':'MODS '+n+'/2';
 }
@@ -828,7 +885,7 @@ let spins=[],rolling=false;
 const ri=n=>Math.floor(Math.random()*n);
 function randomResident(){const n=id=>CATS.find(c=>c.id===id).n;
   return{...def,face:ri(n('face')),hair:ri(n('hair')),eyes:ri(n('eyes')),mouth:ri(n('mouth')),extra:ri(n('extra')),
-    acc:Math.random()<.45?0:1+ri(n('acc')-1),height:ri(5),width:ri(5)}}
+    acc:Math.random()<.45?0:1+ri(n('acc')-1),height:ri(5),width:ri(5),pet:Math.random()<.4?0:1+ri(6),psize:ri(2),pcoat:ri(4),pfeat:ri(2)}}
 function dialStep(d){
   if(menuIn('turn',d)){SFX.dial(d);return}
   if(PLAY.on){playDial(d);return}
@@ -1041,7 +1098,7 @@ function openCard(i,load){const r=roster[i];if(!r)return;if(!r.t){r.t=genTraits(
   const tb=new Uint8Array(W*H);render(tb,{...def,...r.s},{mood:'happy'});paint(mCan.getContext('2d'),tb,PAL);
   document.getElementById('mName').textContent=r.name;
   document.getElementById('mP').textContent=t.p;
-  document.getElementById('mInfo').innerHTML=[['취미',t.h],['좋아하는 것',t.l],['말버릇','“'+t.c+'”'],['생일',t.b[0]+'월 '+t.b[1]+'일']]
+  document.getElementById('mInfo').innerHTML=[['취미',t.h],['좋아하는 것',t.l],['말버릇','“'+t.c+'”'],['생일',t.b[0]+'월 '+t.b[1]+'일'],...(r.s.pet?[['반려동물',PET_KO[r.s.pet]]]:[])]
     .map(([k,v])=>'<dt>'+k+'</dt><dd>'+v+'</dd>').join('');
   document.getElementById('mStats').innerHTML=TR.st.map((k,j)=>'<div class="stat"><span>'+k+'</span><i>'+'<b style="width:'+t.st[j]*20+'%"></b>'+'</i></div>').join('');
   document.getElementById('mMe').textContent=r.id===meId?'나 해제':'나로 설정';
@@ -1074,7 +1131,7 @@ async function cardImage(r){
   let nm=r.name;while(c.measureText(nm).width>440&&nm.length>1)nm=nm.slice(0,-1);if(nm!==r.name)nm+='…';c.fillText(nm,300,356);
   const t=r.t;c.font='18px '+F;const cwid=c.measureText(t.p).width+36;c.fillStyle=v('--accent-soft');rr(c,300-cwid/2,374,cwid,32,16);c.fill();c.fillStyle=v('--accent');c.fillText(t.p,300,397);
   c.fillStyle=v('--line');c.fillRect(90,436,420,1.5);
-  c.textAlign='left';[['취미',t.h],['좋아하는 것',t.l],['말버릇','“'+t.c+'”'],['생일',t.b[0]+'월 '+t.b[1]+'일']].forEach(([a,b],j)=>{const y=480+j*40;
+  c.textAlign='left';[['취미',t.h],['좋아하는 것',t.l],['말버릇','“'+t.c+'”'],['생일',t.b[0]+'월 '+t.b[1]+'일'],...(r.s.pet?[['반려동물',PET_KO[r.s.pet]]]:[])].forEach(([a,b],j)=>{const y=478+j*36;
     c.font='18px '+F;c.fillStyle=v('--muted');c.fillText(a,90,y);c.fillStyle=v('--fg');c.fillText(b,230,y)});
   c.fillStyle=v('--line');c.fillRect(90,632,420,1.5);
   TR.st.forEach((a,j)=>{const y=676+j*34;c.font='16px '+F;c.fillStyle=v('--muted');c.fillText(a,90,y);
@@ -1254,6 +1311,7 @@ const LEVELS=[
 const PLAY={on:false,game:'bounce'};try{if(localStorage.getItem('rm-game')==='fish')PLAY.game='fish'}catch(e){}
 const gcv=document.getElementById('gscr'),gx=gcv.getContext('2d');
 const [C0,C1,C2]=PAL.map(c=>'rgb('+c.join(',')+')');
+let PSPR=null,PET={x:0,y:0,face:1};
 let G=null,hero=null,HS=null,charging=false,chargeT0=0,pendingR=null,playPress=false,joyX=0,lastDial=0,curLv=0;
 const hold={left:false,right:false};
 let prog={clear:[]};try{const p=JSON.parse(localStorage.getItem('rm-bounce')||'null');if(p&&Array.isArray(p.clear))prog=p}catch(e){}
@@ -1263,6 +1321,11 @@ function buzz(){device.classList.remove('buzz');void device.offsetWidth;device.c
 function crop(c){const d=c.getContext('2d').getImageData(0,0,W,H).data;let x0=W,y0=H,x1=-1,y1=-1;
   for(let y=0;y<H;y++)for(let i=0;i<W;i++)if(d[(y*W+i)*4+3]){if(i<x0)x0=i;if(i>x1)x1=i;if(y<y0)y0=y;if(y>y1)y1=y}
   if(x1<0)return{c,w:W,h:H};const o=document.createElement('canvas');o.width=x1-x0+1;o.height=y1-y0+1;o.getContext('2d').drawImage(c,-x0,-y0);return{c:o,w:o.width,h:o.height}}
+function petSprites(s){if(!s||!s.pet)return null;
+  const mk=flip=>{const b=new Uint8Array(W*H),m=new Uint8Array(W*H);drawPet((x,y,v)=>{x|=0;y|=0;if(x>=0&&x<W&&y>=0&&y<H){b[y*W+x]=v;m[y*W+x]=1}},s,32,40,{noShadow:true});
+    const c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d'),im=g.createImageData(W,H);for(let i=0;i<W*H;i++)if(m[i])im.data.set([...PAL[b[i]],255],i*4);g.putImageData(im,0,0);
+    let r=crop(c);if(flip){const o=document.createElement('canvas');o.width=r.w;o.height=r.h;const x=o.getContext('2d');x.translate(r.w,0);x.scale(-1,1);x.drawImage(r.c,0,0);r={c:o,w:r.w,h:r.h}}return r};
+  return{l:mk(0),r:mk(1),bird:s.pet===3,sp:s.pet}}
 function sprites(s){return{n:crop(spriteOf(s,{},PAL)),b:crop(spriteOf(s,{blink:true},PAL)),h:crop(spriteOf(s,{mood:'happy'},PAL)),q:crop(spriteOf(s,{mood:'squish'},PAL))}}
 function heroInfo(){const r=meId&&roster.find(x=>x.id===meId);return r?{name:r.name,s:{...def,...r.s}}:{name:curName,s:{...st}}}
 
@@ -1280,7 +1343,7 @@ function loadLevel(i){curLv=i;const L=LEVELS[i],tiles=L.map.map(r=>r.split(''));
       else stars.push({x:cx,y:cy});row[x]='.'}}));
   G={i,tiles,base:tiles.map(r=>r.slice()),sx,sy,stars,friends,total:stars.length+friends.length,got:0,state:'intro',timer:1.5,deaths:0,crumb:[],t:0};
   spawn();renderStages();updateStrip()}
-function spawn(){hero={x:G.sx,y:G.sy,vx:0,vy:0,ground:false,sq:0,happy:0,blink:2};charging=false;pendingR=null}
+function spawn(){hero={x:G.sx,y:G.sy,vx:0,vy:0,ground:false,sq:0,happy:0,blink:2};PET={x:G.sx-13,y:G.sy,face:1};charging=false;pendingR=null}
 function respawn(){G.tiles=G.base.map(r=>r.slice());G.crumb=[];G.stars.forEach(s=>s.got=false);G.friends.forEach(f=>{f.got=false;f.land=false;f.heart=0});G.got=0;spawn();G.state='play';updateStrip()}
 function nextLevel(){if(G.i<LEVELS.length-1)loadLevel(G.i+1);else{G.state='end';updateStrip()}}
 
@@ -1367,6 +1430,7 @@ function drawGame(t){const c=gx;c.imageSmoothingEnabled=false;c.fillStyle=C0;c.f
       if(open){c.fillStyle=C0;c.fillRect(Math.round(f.x-f.rad*.45),Math.round(f.y+b-f.rad*.62),2,1);if((t/150|0)%2)pat(['.1.','111','.1.'],Math.round(f.x+f.rad*.7),Math.round(f.y+b-f.rad*.8),C1)}}
     else{sprAt(f.spr.h,f.x,f.fy);if(f.heart>0&&(f.heart>.5||(t/90|0)%2))pat(HEART,Math.round(f.x-2),Math.round(f.fy-f.spr.h.h-7-(1.6-f.heart)*4),C1)}}
   const h=hero;
+  if(PSPR&&G.state!=='dead')sprAt(PET.face>0?PSPR.r:PSPR.l,PET.x,PET.y);
   if(G.state!=='dead'||(t/80|0)%2){const f=chargeF();
     const s=(h.happy>0||G.state==='clear'||G.state==='end')?HS.h:(charging&&h.ground)?HS.q:h.blink<.12?HS.b:HS.n;
     let sx=1,sy=1;if(h.sq>.01){sx=1+h.sq*.35;sy=1-h.sq*.4}else if(h.vy<-150){sx=.92;sy=1.08}
@@ -1383,6 +1447,7 @@ function playStep(dt,t){if(PLAY.game==='home'){homeStep(dt,t);return}if(PLAY.gam
   else if(G.state==='dead'){h.vy+=GRAV*dt;h.y+=h.vy*dt;G.timer-=dt;if(G.timer<=0)respawn()}
   else if(G.state==='clear'||G.state==='end'){for(let k=0;k<4;k++)physics(dt/4);if(G.state==='clear'){G.timer-=dt;if(G.timer<=0)nextLevel()}}
   friendsStep(dt);
+  if(PSPR){if(Math.abs(h.vx)>5)PET.face=h.vx>0?1:-1;const tx=h.x-13*PET.face,ty=h.y-(PSPR.bird?12+Math.sin(G.t*4)*2:0);PET.x+=(tx-PET.x)*Math.min(1,dt*5);PET.y+=(ty-PET.y)*Math.min(1,dt*(PSPR.bird?5:8))}
   const tq=charging&&h.ground?.15+.5*chargeF():0;h.sq+=(tq-h.sq)*Math.min(1,dt*(tq>h.sq?10:14));
   if(h.happy>0)h.happy-=dt;h.blink-=dt;if(h.blink<0)h.blink=2+Math.random()*2.5;
   drawGame(t)}
@@ -1411,7 +1476,7 @@ function renderRoles(){const k=PLAY.game+slots.join(','),ROLE=ROLES[PLAY.game];i
 const headP=document.querySelector('header p'),headTxt=headP.textContent;
 function setPlay(on){if(PLAY.on===on)return;PLAY.on=on;gcv.hidden=!on;document.body.classList.toggle('playmode',on);
   hold.left=hold.right=false;joyX=0;charging=false;playPress=false;pendingR=null;squishEl?.classList.remove('down');
-  if(on){if(pressing){pressing=false;sq=0;sqV=0}const hi=heroInfo();HS=sprites(hi.s);heroLine.textContent='주인공 · '+(hi.name||'기기 속 주민');
+  if(on){if(pressing){pressing=false;sq=0;sqV=0}const hi=heroInfo();HS=sprites(hi.s);PSPR=petSprites(hi.s);heroLine.textContent='주인공 · '+(hi.name||'기기 속 주민');
     applyGame()}
   else{headP.textContent=headTxt;document.body.classList.remove('fishmode');device.classList.remove('rumble')}
   updateStrip()}
@@ -1572,6 +1637,7 @@ function drawFish(t){const c=gx,H=F.hook,ts=t/1000;c.imageSmoothingEnabled=false
   c.fillStyle=C1;[6,PIER_W-8].forEach(x=>c.fillRect(x,PIER_Y+4,3,BOT-PIER_Y));
   // resident
   const mood=F.mode==='catch'||F.mode==='legend'?HS.h:F.mode==='fight'?HS.q:((t/1000)%3.2<.13?HS.b:HS.n);
+  if(PSPR)sprAt(PSPR.r,8,PIER_Y-(PSPR.bird?13+Math.round(Math.sin(t/300)):0));
   sprAt(mood,22,PIER_Y,F.mode==='fight'&&F.pulling?1.05:1,F.mode==='fight'&&F.pulling?.95:1);
   // rod bends with tension
   const bend=F.mode==='fight'?F.ten*14:F.dip*3,tip=[ROD1[0]+bend*.4,ROD1[1]+bend];
@@ -1781,7 +1847,7 @@ const PZ_FLOWER=[".1.1.","11.11",".1.1.","..1..",".11.."];
 const EMO={heart:HEART,note:['..11','..1.','..1.','111.','11..'],dots:['1.1.1'],bang:['1','1','1','.','1'],z:['111','..1','.1.','1..','111']};
 function pzTarget(f){for(let k=0;k<6;k++){f.tx=12+Math.random()*168;f.ty=64+Math.random()*72;if(Math.hypot((f.tx-96)/1.6,f.ty-100)>16)break}}
 function pzInit(){const pal=PAL;
-  PZ.folk=roster.map((r,i)=>{const f={idx:i,name:r.name,t:r.t,me:!!meId&&r.id===meId,spr:sprites({...def,...r.s}),x:16+Math.random()*160,y:66+Math.random()*68,tx:0,ty:0,
+  PZ.folk=roster.map((r,i)=>{const f={idx:i,name:r.name,t:r.t,me:!!meId&&r.id===meId,spr:sprites({...def,...r.s}),pspr:petSprites({...def,...r.s}),fd:1,x:16+Math.random()*160,y:66+Math.random()*68,tx:0,ty:0,
     wait:Math.random()*2,hop:0,hv:0,heart:0,emo:null,et:0,sleep:0,spd:(SPEED[r.t?.p]||34)*.42,next:2+Math.random()*5,walk:0,met:0};pzTarget(f);f.x=f.tx;f.y=f.ty;pzTarget(f);return f});
   PZ.props=[{k:'tree',x:20,y:74},{k:'tree',x:172,y:80},{k:'fountain',x:96,y:100},{k:'bench',x:40,y:134},{k:'tree',x:162,y:138},{k:'flower',x:132,y:66},{k:'flower',x:68,y:138},{k:'flower',x:120,y:128}];
   PZ.grass=Array.from({length:46},(_,i)=>[(i*67+13)%186+3,58+((i*41+7)%84)]);updateStrip()}
@@ -1818,6 +1884,7 @@ function pzDraw(t){const c=gx,ts=t/1000;c.setTransform(1,0,0,1,0,0);c.imageSmoot
         for(let k=0;k<6;k++){const ph=((ts*1.4+k/6)%1),dir=k%2?1:-1,dx=dir*ph*12,dy=-Math.sin(ph*Math.PI)*12;c.fillStyle=C2;c.fillRect(Math.round(p.x+dx),Math.round(p.y-18-dy+ph*10),1,2)}}}
     else{const f=it.f,moving=f.wait<=0&&f.sleep<=0,bob=moving?Math.round(Math.abs(Math.sin(f.walk*.5))*1.5):0;
       const s=f.sleep>0?f.spr.b:(f.heart>0||f.hop>0)?f.spr.h:((ts+f.idx*.37)%3.4<.12?f.spr.b:f.spr.n);
+      if(f.pspr){if(Math.abs(f.tx-f.x)>1&&moving)f.fd=f.tx>f.x?1:-1;if(f.px==null){f.px=f.x-9;f.py=f.y}f.px+=(f.x-9*f.fd-f.px)*.08;f.py+=(f.y-f.py)*.08;sprAt(f.fd>0?f.pspr.r:f.pspr.l,Math.round(f.px),Math.round(f.py-(f.pspr.bird?10+Math.sin(ts*3+f.idx):0)))}
       const fy=Math.round(f.y-f.hop-bob);sprAt(s,Math.round(f.x),fy,1,1);f.hy=fy-s.h;
       if(PZ.folk[PZ.sel]===f)pat(['11111','.111.','..1..'],Math.round(f.x)-2,f.hy-7+Math.round(Math.sin(t/150)*1.5),C1);else if(f.me&&(t/400|0)%2)pat(['..1..','.111.'],Math.round(f.x)-2,f.hy-4,C1);
       if(f.emo){const ic=EMO[f.emo],w=ic[0].length+4,h=ic.length+4,bx=Math.round(f.x+5),by=f.hy-h-1;
